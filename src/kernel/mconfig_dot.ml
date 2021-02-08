@@ -139,7 +139,20 @@ module Configurator = struct
       let stderr_r, stderr_w = Unix.pipe () in
       Unix.chdir dir;
       Unix.set_close_on_exec stdin_w;
+      (* Set close on exec for stderr: most processes spawned by merlin
+         are supposed to inherit stderr to output their debug information.
+         This is fine because these processes are short-lived.
+         However the dune helper we are about to spawn is long-lived, which can
+         cause issues because its stderr is going to outlive the one of
+         merlin's client process.
+         Under windows, this makes emacs block, synchronously waiting for
+         stderr to be closed.
+      *)
+      Unix.set_close_on_exec Unix.stderr;
       let pid = Unix.create_process prog args stdin_r stdout_w stderr_w in
+      (* Clear close on exec after spawning, such that other processes still
+         inherit it. *)
+      Unix.clear_close_on_exec Unix.stderr;
       Unix.chdir cwd;
       Unix.close stdin_r;
       Unix.close stdout_w;
